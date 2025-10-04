@@ -26,6 +26,41 @@ public class DnsClient {
 
         byte[] bytes = constructRequest();
         printBytes(bytes);
+
+        // UDP socket logic
+        try {
+            DatagramSocket socket = new DatagramSocket();
+            socket.setSoTimeout(timeout);
+            InetAddress serverAddr = InetAddress.getByName(address);
+            DatagramPacket request = new DatagramPacket(bytes, bytes.length, serverAddr, port);
+            DatagramPacket response = new DatagramPacket(new byte[512], 512);
+            int attempts = 0;
+            boolean receivedResponse = false;
+            while (attempts < retries && !receivedResponse) {
+                try {
+                    socket.send(request);
+                    socket.receive(response);
+                    receivedResponse = true;
+                } catch (Exception e) {
+                    attempts++;
+                    if (attempts == retries) {
+                        System.out.println("ERROR\tMaximum number of retries " + retries + " exceeded");
+                        return;
+                    }
+                    System.out.println("TIMEOUT\tRetrying...");
+                }
+            }
+            socket.close();
+            // Process response
+            byte[] responseData = new byte[response.getLength()];
+            System.arraycopy(response.getData(), 0, responseData, 0, response.getLength());
+            printBytes(responseData);
+            parseResponse(responseData);
+
+        } catch (Exception e) {
+            System.out.println("Error with UDP socket: " + e.getMessage());
+        }
+
     }
 
     public static byte[] constructRequest() {
@@ -44,9 +79,109 @@ public class DnsClient {
 
         return req.array();
     }
-    public static byte[] parseResponse() {
-        return null;
+    public static void parseResponse(byte[] response) {
+        ByteBuffer buffer = ByteBuffer.wrap(response);
+
+        // Parse header
+        int transactionID = buffer.getShort() & 0xFFFF;
+        int flags = buffer.getShort() & 0xFFFF;
+        int qdCount = buffer.getShort() & 0xFFFF;
+        int anCount = buffer.getShort() & 0xFFFF;
+        int nsCount = buffer.getShort() & 0xFFFF;
+        int arCount = buffer.getShort() & 0xFFFF;
+
+        // Print header info for debugging
+        System.out.println("Transaction ID: " + transactionID);
+        System.out.println("Flags: " + flags);
+        System.out.println("Questions: " + qdCount);
+        System.out.println("Answers: " + anCount);
+        System.out.println("Authority RRs: " + nsCount);
+        System.out.println("Additional RRs: " + arCount);
+
+        // 2. Skip header and question section to start at the answer section
+        buffer.position(12 + getDomainLength() + 5);
+
+        // 3. Parse answer section (start here for step-by-step)
+        int answerOffset = 12 + getDomainLength() + 5;
+        buffer.position(answerOffset);
+
+        // Parse answers
+        for (int i = 0; i < anCount; i++) {
+            int name = buffer.getShort() & 0xFFFF;
+            int type = buffer.getShort() & 0xFFFF;
+            int clazz = buffer.getShort() & 0xFFFF;
+            int ttl = buffer.getInt();
+            int rdlength = buffer.getShort() & 0xFFFF;
+            byte[] rdata = new byte[rdlength];
+            buffer.get(rdata);
+            System.out.print("Answer " + (i+1) + ": TYPE=" + type + ", ");
+            if (type == 1 && rdlength == 4) {
+                // A record
+                System.out.println("RDATA=" + (rdata[0] & 0xFF) + "." + (rdata[1] & 0xFF) + "." + (rdata[2] & 0xFF) + "." + (rdata[3] & 0xFF));
+            } else if (type == 5 || type == 2) {
+                // CNAME or NS
+                String domain = decodeDomainName(rdata, 0);
+                System.out.println("Decoded=" + domain);
+            } else if (type == 15) {
+                // MX
+                int preference = ((rdata[0] & 0xFF) << 8) | (rdata[1] & 0xFF);
+                String domain = decodeDomainName(rdata, 2);
+                System.out.println("MX Pref=" + preference + ", Domain=" + domain);
+            } else {
+                System.out.println("RDATA=" + java.util.Arrays.toString(rdata));
+            }
+        }
+
+        // Parse authority section
+        if (nsCount > 0) {
+            System.out.println("***Authority Section (" + nsCount + " records)***");
+            for (int i = 0; i < nsCount; i++) {
+                int name = buffer.getShort() & 0xFFFF;
+                int type = buffer.getShort() & 0xFFFF;
+                int clazz = buffer.getShort() & 0xFFFF;
+                int ttl = buffer.getInt();
+                int rdlength = buffer.getShort() & 0xFFFF;
+                byte[] rdata = new byte[rdlength];
+                buffer.get(rdata);
+                if (type == 2) { // NS record
+                    String domain = decodeDomainName(rdata, 0);
+                    System.out.println("NS record: " + domain);
+                } else if (type == 6) { // SOA record
+                    System.out.println("SOA record: " + java.util.Arrays.toString(rdata));
+                } else {
+                    System.out.println("Authority TYPE=" + type + ", RDATA=" + java.util.Arrays.toString(rdata));
+                }
+            }
+        }
+
+        // Parse additional section
+        if (arCount > 0) {
+            System.out.println("***Additional Section (" + arCount + " records)***");
+            for (int i = 0; i < arCount; i++) {
+                int name = buffer.getShort() & 0xFFFF;
+                int type = buffer.getShort() & 0xFFFF;
+                int clazz = buffer.getShort() & 0xFFFF;
+                int ttl = buffer.getInt();
+                int rdlength = buffer.getShort() & 0xFFFF;
+                byte[] rdata = new byte[rdlength];
+                buffer.get(rdata);
+                if (type == 1 && rdlength == 4) { // A record
+                    System.out.println("Additional A record: " + (rdata[0] & 0xFF) + "." + (rdata[1] & 0xFF) + "." + (rdata[2] & 0xFF) + "." + (rdata[3] & 0xFF));
+                } else if (type == 28 && rdlength == 16) { // AAAA record
+                    StringBuilder ipv6 = new StringBuilder();
+                    for (int b = 0; b < 16; b += 2) {
+                        ipv6.append(String.format("%02x%02x", rdata[b], rdata[b+1]));
+                        if (b < 14) ipv6.append(":");
+                    }
+                    System.out.println("Additional AAAA record: " + ipv6);
+                } else {
+                    System.out.println("Additional TYPE=" + type + ", RDATA=" + java.util.Arrays.toString(rdata));
+                }
+            }
+        }
     }
+
+
     public static void printResponse() {
 
     }
@@ -160,6 +295,39 @@ public class DnsClient {
             length += toks[i].length() + 1;
         }
         return length;
+    }
+
+    // Helper to decode DNS names (handles compression)
+    public static String decodeDomainName(byte[] data, int offset) {
+        StringBuilder name = new StringBuilder();
+        int i = offset;
+        boolean jumped = false;
+        int jumpPos = -1;
+        while (i < data.length) {
+            int len = data[i] & 0xFF;
+            if (len == 0) {
+                if (!jumped) i++;
+                break;
+            }
+            if ((len & 0xC0) == 0xC0) {
+                int pointer = ((len & 0x3F) << 8) | (data[i + 1] & 0xFF);
+                if (!jumped) jumpPos = i + 2;
+                i = pointer;
+                jumped = true;
+                continue;
+            } else {
+                if (name.length() > 0) name.append(".");
+                for (int j = 1; j <= len; j++) {
+                    name.append((char) data[i + j]);
+                }
+                i += len + 1;
+            }
+        }
+        if (jumped && jumpPos != -1) {
+            // If we jumped, continue after the pointer
+            i = jumpPos;
+        }
+        return name.toString();
     }
 
 }
