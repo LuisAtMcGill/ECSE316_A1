@@ -19,14 +19,13 @@ public class DnsClient {
     public static void main(String[] args) {
         try {
             parseArguments(args);
-            System.out.println(domainName);
+            //System.out.println(domainName);
         } catch (Exception e) {
             System.out.println("Error");
         }
 
         byte[] bytes = constructRequest();
-        printBytes(bytes);
-
+        
         // UDP socket logic
         try {
             DatagramSocket socket = new DatagramSocket();
@@ -38,9 +37,21 @@ public class DnsClient {
             boolean receivedResponse = false;
             while (attempts < retries && !receivedResponse) {
                 try {
+                    System.out.println("DnsClient sending request for " + domainName);
+                    System.out.println("Server: " + address);
+                    System.out.println("Request type: A");
+
+                    double start, end;
+                    start = System.currentTimeMillis();
+
                     socket.send(request);
                     socket.receive(response);
+
+                    end = System.currentTimeMillis();
+
+                    double responseTime = end - start;  
                     receivedResponse = true;
+                    System.out.println("Response received after " + responseTime + " seconds " + "(" + retries + ") retries");
                 } catch (Exception e) {
                     attempts++;
                     if (attempts == retries) {
@@ -54,7 +65,7 @@ public class DnsClient {
             // Process response
             byte[] responseData = new byte[response.getLength()];
             System.arraycopy(response.getData(), 0, responseData, 0, response.getLength());
-            printBytes(responseData);
+            //printBytes(responseData);
             parseResponse(responseData);
 
         } catch (Exception e) {
