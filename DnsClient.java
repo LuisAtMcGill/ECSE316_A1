@@ -120,12 +120,12 @@ public class DnsClient {
                 System.out.println("RDATA=" + (rdata[0] & 0xFF) + "." + (rdata[1] & 0xFF) + "." + (rdata[2] & 0xFF) + "." + (rdata[3] & 0xFF));
             } else if (type == 5 || type == 2) {
                 // CNAME or NS
-                String domain = decodeDomainName(rdata, 0);
+                String domain = decodeDomainName(response, buffer.position() - rdlength);
                 System.out.println("Decoded=" + domain);
             } else if (type == 15) {
                 // MX
                 int preference = ((rdata[0] & 0xFF) << 8) | (rdata[1] & 0xFF);
-                String domain = decodeDomainName(rdata, 2);
+                String domain = decodeDomainName(response, buffer.position() - rdlength + 2);
                 System.out.println("MX Pref=" + preference + ", Domain=" + domain);
             } else {
                 System.out.println("RDATA=" + java.util.Arrays.toString(rdata));
