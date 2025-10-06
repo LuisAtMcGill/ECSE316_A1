@@ -1,3 +1,4 @@
+import java.util.Base64;
 import java.util.Random;
 
 import java.net.DatagramPacket;
@@ -5,6 +6,7 @@ import java.net.DatagramSocket;
 import java.net.InetAddress;
 
 import java.nio.ByteBuffer;
+import java.nio.charset.StandardCharsets;
 
 public class DnsClient {
 
@@ -39,7 +41,7 @@ public class DnsClient {
                 try {
                     System.out.println("DnsClient sending request for " + domainName);
                     System.out.println("Server: " + address);
-                    System.out.println("Request type: A");
+                    System.out.println("Request type: " + queryType);
 
                     double start, end;
                     start = System.currentTimeMillis();
@@ -94,6 +96,7 @@ public class DnsClient {
         ByteBuffer buffer = ByteBuffer.wrap(response);
 
         // Parse header
+        
         int transactionID = buffer.getShort() & 0xFFFF;
         int flags = buffer.getShort() & 0xFFFF;
         int qdCount = buffer.getShort() & 0xFFFF;
@@ -101,23 +104,41 @@ public class DnsClient {
         int nsCount = buffer.getShort() & 0xFFFF;
         int arCount = buffer.getShort() & 0xFFFF;
 
-        // Print header info for debugging
-        System.out.println("Transaction ID: " + transactionID);
-        System.out.println("Flags: " + flags);
-        System.out.println("Questions: " + qdCount);
-        System.out.println("Answers: " + anCount);
-        System.out.println("Authority RRs: " + nsCount);
-        System.out.println("Additional RRs: " + arCount);
-
-        // 2. Skip header and question section to start at the answer section
+        // Skip header and question section to start at the answer section
         buffer.position(12 + getDomainLength() + 5);
 
-        // 3. Parse answer section (start here for step-by-step)
+        // Parse answer section (start here for step-by-step)
         int answerOffset = 12 + getDomainLength() + 5;
         buffer.position(answerOffset);
 
+        // Check if rcode indicates an error
+        int rcode = flags & 0xF;
+        if (rcode == 1) {
+            System.out.println("The name server was unable to interpret the query");
+            return;
+        }
+        if (rcode == 2) {
+            System.out.println("Server failure: the name server was unable to process this query due to a problem with the\r\n" + //
+                                "name server");
+            return;
+        }
+        if (rcode == 3) {
+            System.out.println("Domain not found");
+            return;
+        }
+        if (rcode == 4) {
+            System.out.println("Not implemented: the name server does not support the requested kind of query");
+            return;
+        }
+        if (rcode == 5) {
+            System.out.println(" Refused: the name server refuses to perform the requested operation for policy reasons");
+            return;
+        }
+
         // Parse answers
+        System.out.printf("***Answer Section (%d records)***\n", anCount);
         for (int i = 0; i < anCount; i++) {
+
             int name = buffer.getShort() & 0xFFFF;
             int type = buffer.getShort() & 0xFFFF;
             int clazz = buffer.getShort() & 0xFFFF;
@@ -125,10 +146,13 @@ public class DnsClient {
             int rdlength = buffer.getShort() & 0xFFFF;
             byte[] rdata = new byte[rdlength];
             buffer.get(rdata);
-            System.out.print("Answer " + (i+1) + ": TYPE=" + type + ", ");
+
             if (type == 1 && rdlength == 4) {
-                // A record
-                System.out.println("RDATA=" + (rdata[0] & 0xFF) + "." + (rdata[1] & 0xFF) + "." + (rdata[2] & 0xFF) + "." + (rdata[3] & 0xFF));
+                // A record, for obtaining ip address
+                String ipAddress = Base64.getEncoder().encodeToString(rdata);
+                System.out.println("IP " + ipAddress);
+                //System.out.println("IP " + (rdata[0] & 0xFF) + "." + (rdata[1] & 0xFF) + "." + (rdata[2] & 0xFF) + "." + (rdata[3] & 0xFF));
+                
             } else if (type == 5 || type == 2) {
                 // CNAME or NS
                 String domain = decodeDomainName(rdata, 0);
@@ -219,7 +243,7 @@ public class DnsClient {
                 case "-mx":
                     queryType = "MX";
                     break;
-                case "ns":
+                case "-ns":
                     queryType = "NS";
                     break;
             }
