@@ -51,7 +51,7 @@ public class DnsClient {
 
                     end = System.currentTimeMillis();
 
-                    double responseTime = end - start;  
+                    double responseTime = (end - start) / 1000;
                     receivedResponse = true;
                     System.out.println("Response received after " + responseTime + " seconds " + "(" + retries + ") retries");
                 } catch (Exception e) {
