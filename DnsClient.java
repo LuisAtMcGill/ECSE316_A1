@@ -81,11 +81,9 @@ public class DnsClient {
 
         // Request length is domain name length + header bytes (12) + question bytes (5)
         ByteBuffer req = ByteBuffer.allocate(domainNameLength + 12 + 5);
-
         // Put request header
         byte[] reqHeader = getRequestHeader();
         req.put(reqHeader);
-
         // Put question
         byte[] question = getQuestion(domainNameLength);
         req.put(question);
@@ -134,7 +132,14 @@ public class DnsClient {
             System.out.println(" Refused: the name server refuses to perform the requested operation for policy reasons");
             return;
         }
+        String auth;
 
+        int aa = (flags >> 10) & 1;
+        if (aa == 0) {
+            auth = "nonauth";
+        } else {
+            auth = "auth";
+        }
         // Parse answers
         System.out.printf("***Answer Section (%d records)***\n", anCount);
         for (int i = 0; i < anCount; i++) {
@@ -149,22 +154,28 @@ public class DnsClient {
 
             if (type == 1 && rdlength == 4) {
                 // A record
-                System.out.println("RDATA=" + (rdata[0] & 0xFF) + "." + (rdata[1] & 0xFF) + "." + (rdata[2] & 0xFF) + "." + (rdata[3] & 0xFF));
-            } else if (type == 5 || type == 2) {
-                // CNAME or NS
+                System.out.println("IP\t" + (rdata[0] & 0xFF) + "." + (rdata[1] & 0xFF) + "." + (rdata[2] & 0xFF) + "." + (rdata[3] & 0xFF) + "\t" + ttl + "\t" +auth);
+            } else if (type == 5) {
+                // CNAME
                 String domain = decodeDomainName(response, buffer.position() - rdlength);
-                System.out.println("Decoded=" + domain);
+                System.out.println("CNAME\t" + domain + "\t" + ttl + "\t" + auth);
+            }
+            else if (type == 2) {
+                // NS
+                String domain = decodeDomainName(response, buffer.position() - rdlength);
+                System.out.println("NS " + domain + "\t" + ttl + "\t" + auth);
             } else if (type == 15) {
                 // MX
                 int preference = ((rdata[0] & 0xFF) << 8) | (rdata[1] & 0xFF);
                 String domain = decodeDomainName(response, buffer.position() - rdlength + 2);
-                System.out.println("MX Pref=" + preference + ", Domain=" + domain);
+                System.out.println("MX " + preference + "\t" + domain + "\t\t" + ttl + '\t' + auth);
             } else {
                 System.out.println("RDATA=" + java.util.Arrays.toString(rdata));
             }
         }
 
         // Parse authority section
+        /*
         if (nsCount > 0) {
             System.out.println("***Authority Section (" + nsCount + " records)***");
             for (int i = 0; i < nsCount; i++) {
@@ -185,10 +196,12 @@ public class DnsClient {
                 }
             }
         }
+        */
 
         // Parse additional section
         if (arCount > 0) {
             System.out.println("***Additional Section (" + arCount + " records)***");
+            /*
             for (int i = 0; i < arCount; i++) {
                 int name = buffer.getShort() & 0xFFFF;
                 int type = buffer.getShort() & 0xFFFF;
@@ -210,12 +223,8 @@ public class DnsClient {
                     System.out.println("Additional TYPE=" + type + ", RDATA=" + java.util.Arrays.toString(rdata));
                 }
             }
+            */
         }
-    }
-
-
-    public static void printResponse() {
-
     }
 
     // For debugging purposes
@@ -361,5 +370,4 @@ public class DnsClient {
         }
         return name.toString();
     }
-
 }
