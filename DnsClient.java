@@ -23,7 +23,7 @@ public class DnsClient {
             parseArguments(args);
             //System.out.println(domainName);
         } catch (Exception e) {
-            System.out.println("Error");
+            System.out.println("Error: In correct input syntax");
         }
 
         byte[] bytes = constructRequest();
@@ -174,59 +174,11 @@ public class DnsClient {
             }
         }
 
-        // Parse authority section
-        /*
-        if (nsCount > 0) {
-            System.out.println("***Authority Section (" + nsCount + " records)***");
-            for (int i = 0; i < nsCount; i++) {
-                int name = buffer.getShort() & 0xFFFF;
-                int type = buffer.getShort() & 0xFFFF;
-                int clazz = buffer.getShort() & 0xFFFF;
-                int ttl = buffer.getInt();
-                int rdlength = buffer.getShort() & 0xFFFF;
-                byte[] rdata = new byte[rdlength];
-                buffer.get(rdata);
-                if (type == 2) { // NS record
-                    String domain = decodeDomainName(rdata, 0);
-                    System.out.println("NS record: " + domain);
-                } else if (type == 6) { // SOA record
-                    System.out.println("SOA record: " + java.util.Arrays.toString(rdata));
-                } else {
-                    System.out.println("Authority TYPE=" + type + ", RDATA=" + java.util.Arrays.toString(rdata));
-                }
-            }
-        }
-        */
-
         // Parse additional section
         if (arCount > 0) {
             System.out.println("***Additional Section (" + arCount + " records)***");
-            /*
-            for (int i = 0; i < arCount; i++) {
-                int name = buffer.getShort() & 0xFFFF;
-                int type = buffer.getShort() & 0xFFFF;
-                int clazz = buffer.getShort() & 0xFFFF;
-                int ttl = buffer.getInt();
-                int rdlength = buffer.getShort() & 0xFFFF;
-                byte[] rdata = new byte[rdlength];
-                buffer.get(rdata);
-                if (type == 1 && rdlength == 4) { // A record
-                    System.out.println("Additional A record: " + (rdata[0] & 0xFF) + "." + (rdata[1] & 0xFF) + "." + (rdata[2] & 0xFF) + "." + (rdata[3] & 0xFF));
-                } else if (type == 28 && rdlength == 16) { // AAAA record
-                    StringBuilder ipv6 = new StringBuilder();
-                    for (int b = 0; b < 16; b += 2) {
-                        ipv6.append(String.format("%02x%02x", rdata[b], rdata[b+1]));
-                        if (b < 14) ipv6.append(":");
-                    }
-                    System.out.println("Additional AAAA record: " + ipv6);
-                } else {
-                    System.out.println("Additional TYPE=" + type + ", RDATA=" + java.util.Arrays.toString(rdata));
-                }
-            }
-            */
         }
     }
-
     // For debugging purposes
     public static void printBytes(byte[] bytes) {
         System.out.println(new String(bytes));
@@ -253,7 +205,7 @@ public class DnsClient {
                     queryType = "NS";
                     break;
             }
-            // Put error handling of no domain name or server provided later
+
             if (arg.contains("@")) {
                 address = arg.substring(1);
                 domainName = args[++i];
