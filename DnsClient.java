@@ -28,7 +28,7 @@ public class DnsClient {
 
         byte[] bytes = constructRequest();
         
-        // UDP socket logic
+        //UDP socket logic
         try {
             DatagramSocket socket = new DatagramSocket();
             socket.setSoTimeout(timeout);
@@ -64,10 +64,10 @@ public class DnsClient {
                 }
             }
             socket.close();
-            // Process response
+            // process response
             byte[] responseData = new byte[response.getLength()];
             System.arraycopy(response.getData(), 0, responseData, 0, response.getLength());
-            //printBytes(responseData);
+            
             parseResponse(responseData);
 
         } catch (Exception e) {
@@ -79,22 +79,22 @@ public class DnsClient {
     public static byte[] constructRequest() {
         int domainNameLength = getDomainLength();
 
-        // Request length is domain name length + header bytes (12) + question bytes (5)
+        // request length is domain name length + header bytes (12) + question bytes (5)
         ByteBuffer req = ByteBuffer.allocate(domainNameLength + 12 + 5);
-        // Put request header
+        // put request header
         byte[] reqHeader = getRequestHeader();
         req.put(reqHeader);
-        // Put question
+        // put question
         byte[] question = getQuestion(domainNameLength);
         req.put(question);
 
         return req.array();
     }
+
     public static void parseResponse(byte[] response) {
         ByteBuffer buffer = ByteBuffer.wrap(response);
 
-        // Parse header
-        
+        // parse header
         int transactionID = buffer.getShort() & 0xFFFF;
         int flags = buffer.getShort() & 0xFFFF;
         int qdCount = buffer.getShort() & 0xFFFF;
@@ -102,14 +102,14 @@ public class DnsClient {
         int nsCount = buffer.getShort() & 0xFFFF;
         int arCount = buffer.getShort() & 0xFFFF;
 
-        // Skip header and question section to start at the answer section
+        // skip header and question section, start at the answer section
         buffer.position(12 + getDomainLength() + 5);
 
-        // Parse answer section (start here for step-by-step)
+        // parse answer
         int answerOffset = 12 + getDomainLength() + 5;
         buffer.position(answerOffset);
 
-        // Check if rcode indicates an error
+        // check if rcode indicates an error
         int rcode = flags & 0xF;
         if (rcode == 1) {
             System.out.println("The name server was unable to interpret the query");
@@ -140,7 +140,7 @@ public class DnsClient {
         } else {
             auth = "auth";
         }
-        // Parse answers
+        // parse answers
         System.out.printf("***Answer Section (%d records)***\n", anCount);
         for (int i = 0; i < anCount; i++) {
 
@@ -174,12 +174,12 @@ public class DnsClient {
             }
         }
 
-        // Parse additional section
+        // parse additional section
         if (arCount > 0) {
             System.out.println("***Additional Section (" + arCount + " records)***");
         }
     }
-    // For debugging purposes
+    // for debugging purposes
     public static void printBytes(byte[] bytes) {
         System.out.println(new String(bytes));
     }
@@ -217,7 +217,7 @@ public class DnsClient {
     private static byte[] getRequestHeader() {
         ByteBuffer header = ByteBuffer.allocate(12);
 
-        // Random id for request header
+        // random id for request header
         byte[] id = new byte[2];
         new Random().nextBytes(id);
 
@@ -260,7 +260,7 @@ public class DnsClient {
             }
         }
 
-        // Terminate with zero-length octet
+        // terminate with zero-length octet
         q.put((byte) 0);
 
         if (queryType.equals("A")) {
@@ -290,7 +290,7 @@ public class DnsClient {
         return length;
     }
 
-    // Helper to decode DNS names (handles compression)
+    // helper method to decode DNS names and handle compression
     public static String decodeDomainName(byte[] data, int offset) {
         StringBuilder name = new StringBuilder();
         int i = offset;
@@ -317,7 +317,7 @@ public class DnsClient {
             }
         }
         if (jumped && jumpPos != -1) {
-            // If we jumped, continue after the pointer
+            // if a jump happened, continue after the pointer
             i = jumpPos;
         }
         return name.toString();
